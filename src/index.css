@@ -29,3 +29,11 @@ body {
   border: 1px solid rgba(102, 252, 241, 0.05);
   border-radius: 16px;
 }
+
+/* Rich Text Editor Placeholder */
+[contenteditable]:empty:before {
+  content: attr(data-placeholder);
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  display: block;
+}

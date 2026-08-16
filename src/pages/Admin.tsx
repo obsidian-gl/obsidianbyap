@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
-import { Download, Upload, Mail, Users, Lock, Sparkles, Paperclip, Link as LinkIcon, X, Trash2 } from 'lucide-react';
+import { Download, Upload, Mail, Users, Lock, Sparkles, Paperclip, X, Trash2, Search } from 'lucide-react';
 import Papa from 'papaparse';
 import { sendEmail } from '../lib/googleApi';
+import RichTextEditor from '../components/RichTextEditor';
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -13,6 +14,10 @@ export default function Admin() {
   const [users, setUsers] = useState<any[]>([]);
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search state
+  const [userSearch, setUserSearch] = useState('');
+  const [subSearch, setSubSearch] = useState('');
 
   // Email form state
   const [emailSubject, setEmailSubject] = useState('');
@@ -23,12 +28,7 @@ export default function Admin() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentBase64, setAttachmentBase64] = useState<string>('');
 
-  // Link helper
-  const [linkUrl, setLinkUrl] = useState('');
-  const [linkText, setLinkText] = useState('');
-
   const csvInputRef = useRef<HTMLInputElement>(null);
-
   const currentUser = auth.currentUser;
 
   const handleLogin = (e: React.FormEvent) => {
@@ -90,7 +90,6 @@ export default function Admin() {
               `;
               await sendEmail(u.email, "Happy Birthday from Obsidian! 🎉", htmlBody);
               
-              // Record that we sent it this year so we don't spam them on page refresh
               await setDoc(doc(db, 'users', u.id), { lastBirthdayEmailSentYear: currentYear }, { merge: true });
               alert(`🎉 Auto-Pilot Success: Automatically sent a Happy Birthday email to ${u.email}!`);
             } catch (error) {
@@ -105,16 +104,10 @@ export default function Admin() {
   }, [users, isAuthenticated]);
 
   const downloadCSV = (data: any[], filename: string) => {
-    // Explicitly define columns so that even if the first row lacks them, they are included
     const columns = ["id", "email", "name", "phone", "address", "birthday", "role", "photoURL"];
-    
-    // Create a normalized array of objects containing all keys
     const normalizedData = data.map(item => {
       const row: any = {};
-      columns.forEach(col => {
-        row[col] = item[col] || '';
-      });
-      // also copy any extra fields
+      columns.forEach(col => { row[col] = item[col] || ''; });
       Object.keys(item).forEach(key => {
         if (!columns.includes(key)) row[key] = item[key];
       });
@@ -155,7 +148,7 @@ export default function Admin() {
             }
           }
           alert(`Imported ${added} subscribers from CSV.`);
-          fetchData(); // refresh
+          fetchData();
         } catch (error: any) {
           alert(`Error importing CSV: ${error.message}`);
         }
@@ -182,16 +175,19 @@ export default function Admin() {
     }
   };
 
-  const insertLink = () => {
-    if (!linkUrl) return;
-    const text = linkText || linkUrl;
-    const htmlLink = `<a href="${linkUrl}" style="color: #66FCF1; text-decoration: underline;">${text}</a>`;
-    setEmailBody(prev => prev + (prev ? '\n' : '') + htmlLink);
-    setLinkUrl('');
-    setLinkText('');
-  };
-
   const activeSubscribers = subscribers.filter(s => s.status !== 'unsubscribed');
+
+  const filteredUsers = users.filter(u => 
+    u.name?.toLowerCase().includes(userSearch.toLowerCase()) || 
+    u.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    u.phone?.includes(userSearch) ||
+    u.address?.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
+  const filteredSubs = activeSubscribers.filter(s => 
+    s.name?.toLowerCase().includes(subSearch.toLowerCase()) || 
+    s.email?.toLowerCase().includes(subSearch.toLowerCase())
+  );
 
   const handleBulkEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,33 +279,49 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen pt-32 pb-20 px-4 sm:px-6 max-w-7xl mx-auto space-y-8 sm:space-y-12 overflow-x-hidden">
+    <div className="min-h-screen pt-28 pb-20 px-4 sm:px-6 max-w-[1400px] mx-auto space-y-6 overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl sm:text-4xl font-bold text-white">Command Center</h1>
         <button onClick={() => fetchData()} className="text-accent text-sm hover:underline self-start sm:self-auto">Refresh Data</button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-12rem)] min-h-[800px]">
         {/* Users Section */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-panel p-4 sm:p-6 flex flex-col h-full overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2"><Users className="text-accent w-5 h-5"/> Registered Users ({users.length})</h2>
-            <button onClick={() => downloadCSV(users, 'obsidian_users')} className="p-2 bg-white/5 hover:bg-white/10 rounded-md transition-colors text-white" title="Download CSV">
-              <Download className="w-4 h-4" />
-            </button>
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-panel p-4 sm:p-6 flex flex-col flex-1 overflow-hidden lg:w-1/2 min-h-[400px]">
+          <div className="flex flex-col gap-4 mb-4 shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <Users className="text-accent w-5 h-5"/> Registered Users ({users.length})
+              </h2>
+              <button onClick={() => downloadCSV(users, 'obsidian_users')} className="p-2 bg-white/5 hover:bg-white/10 rounded-md transition-colors text-white" title="Download CSV">
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
+            
+            {/* User Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-main/50" />
+              <input 
+                type="text" 
+                placeholder="Search users by name, email, phone..." 
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full bg-obsidian-light border border-white/5 rounded-lg pl-9 pr-4 py-2 text-white text-sm focus:border-accent outline-none"
+              />
+            </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto overflow-x-auto min-h-[300px]">
+          <div className="flex-1 overflow-y-auto pr-2 min-h-0">
             {loading ? <p className="text-text-main/50">Loading...</p> : (
-              <div className="space-y-3 sm:space-y-4">
-                {users.map(u => (
-                  <div key={u.id} className="p-3 sm:p-4 bg-obsidian-light/50 border border-white/5 rounded-lg flex flex-col gap-2 min-w-[200px] relative group">
-                    <button onClick={() => deleteUser(u.id)} className="absolute top-2 right-2 p-1.5 bg-red-500/10 text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20">
+              <div className="space-y-3">
+                {filteredUsers.map(u => (
+                  <div key={u.id} className="p-3 sm:p-4 bg-obsidian-light/50 border border-white/5 rounded-lg flex flex-col gap-2 relative group overflow-hidden">
+                    <button onClick={() => deleteUser(u.id)} className="absolute top-2 right-2 p-1.5 bg-red-500/10 text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20 z-10">
                       <Trash2 className="w-4 h-4" />
                     </button>
                     <div className="flex items-start gap-3">
-                      {u.photoURL && <img src={u.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-white/10" />}
-                      <div className="overflow-hidden pr-8">
+                      {u.photoURL && <img src={u.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-white/10 shrink-0" />}
+                      <div className="overflow-hidden pr-8 flex-1">
                         <p className="font-semibold text-white text-sm sm:text-base truncate">{u.name || 'Unnamed'}</p>
                         <p className="text-xs sm:text-sm text-text-main/70 truncate">{u.email}</p>
                       </div>
@@ -321,40 +333,42 @@ export default function Admin() {
                     </div>
                   </div>
                 ))}
+                {filteredUsers.length === 0 && <p className="text-sm text-text-main/50 text-center py-4">No users found.</p>}
               </div>
             )}
           </div>
         </motion.div>
 
         {/* Newsletter Section */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="glass-panel p-4 sm:p-6 flex flex-col h-full overflow-hidden">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2"><Mail className="text-accent w-5 h-5"/> Subscribers ({activeSubscribers.length} Active)</h2>
-            <div className="flex gap-2">
-              <label className="p-2 bg-white/5 hover:bg-white/10 rounded-md transition-colors text-white cursor-pointer" title="Upload CSV">
-                <Upload className="w-4 h-4" />
-                <input type="file" accept=".csv" onChange={handleCsvUpload} ref={csvInputRef} className="hidden" />
-              </label>
-              <button onClick={() => downloadCSV(subscribers, 'obsidian_all_subscribers')} className="p-2 bg-white/5 hover:bg-white/10 rounded-md transition-colors text-white" title="Download CSV (Includes Unsubscribed)">
-                <Download className="w-4 h-4" />
-              </button>
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="glass-panel p-4 sm:p-6 flex flex-col flex-1 overflow-hidden lg:w-1/2 min-h-[500px]">
+          <div className="flex flex-col gap-4 mb-4 shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <Mail className="text-accent w-5 h-5"/> Subscribers ({activeSubscribers.length} Active)
+              </h2>
+              <div className="flex gap-2">
+                <label className="p-2 bg-white/5 hover:bg-white/10 rounded-md transition-colors text-white cursor-pointer" title="Upload CSV">
+                  <Upload className="w-4 h-4" />
+                  <input type="file" accept=".csv" onChange={handleCsvUpload} ref={csvInputRef} className="hidden" />
+                </label>
+                <button onClick={() => downloadCSV(subscribers, 'obsidian_all_subscribers')} className="p-2 bg-white/5 hover:bg-white/10 rounded-md transition-colors text-white" title="Download CSV (Includes Unsubscribed)">
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
           
-          <div className="mb-8 p-3 sm:p-4 bg-obsidian border border-accent/10 rounded-xl overflow-hidden">
+          <div className="mb-6 p-3 sm:p-4 bg-obsidian border border-accent/10 rounded-xl shrink-0">
             <h3 className="text-sm font-semibold text-white mb-3">Broadcast Message</h3>
             <form onSubmit={handleBulkEmail} className="space-y-3">
               <input type="text" placeholder="Subject" value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} required className="w-full bg-obsidian-light border border-white/5 rounded px-3 py-2 text-white text-sm focus:border-accent outline-none" />
               
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input type="text" placeholder="Link URL (e.g. https://...)" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="flex-1 bg-obsidian-light border border-white/5 rounded px-3 py-2 text-white text-sm focus:border-accent outline-none" />
-                <input type="text" placeholder="Link Text" value={linkText} onChange={(e) => setLinkText(e.target.value)} className="flex-1 bg-obsidian-light border border-white/5 rounded px-3 py-2 text-white text-sm focus:border-accent outline-none" />
-                <button type="button" onClick={insertLink} className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded text-sm transition-colors flex items-center justify-center gap-1 shrink-0">
-                  <LinkIcon className="w-4 h-4" /> Add Link
-                </button>
-              </div>
-
-              <textarea placeholder="HTML Body (use {{name}} for placeholder)" value={emailBody} onChange={(e) => setEmailBody(e.target.value)} required rows={4} className="w-full bg-obsidian-light border border-white/5 rounded px-3 py-2 text-white text-sm focus:border-accent outline-none font-mono" />
+              {/* Rich Text Editor Component */}
+              <RichTextEditor 
+                value={emailBody} 
+                onChange={setEmailBody} 
+                placeholder="HTML Body (use {{name}} for placeholder)" 
+              />
               
               <div className="flex items-center gap-3 bg-obsidian-light/50 p-2 rounded border border-white/5">
                 <label className="flex items-center gap-2 cursor-pointer bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded transition-colors text-sm text-white">
@@ -375,17 +389,33 @@ export default function Admin() {
             </form>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-2 min-h-[150px]">
+          <div className="flex flex-col gap-3 shrink-0 mb-3">
+             <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-main/50" />
+              <input 
+                type="text" 
+                placeholder="Search active subscribers..." 
+                value={subSearch}
+                onChange={(e) => setSubSearch(e.target.value)}
+                className="w-full bg-obsidian-light border border-white/5 rounded-lg pl-9 pr-4 py-2 text-white text-sm focus:border-accent outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-2 min-h-0 space-y-2">
             {loading ? <p className="text-text-main/50">Loading...</p> : (
-              subscribers.map(s => (
-                <div key={s.id} className="p-3 bg-obsidian-light/30 border border-white/5 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-1 relative group pr-10">
-                  <span className="text-sm text-white truncate">{s.email} {s.status === 'unsubscribed' && <span className="text-red-400 text-xs ml-2">(Unsubscribed)</span>}</span>
-                  <span className="text-xs text-text-main/50">{new Date(s.subscribedAt).toLocaleDateString()}</span>
-                  <button onClick={() => deleteSubscriber(s.id)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-red-500/10 text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              ))
+              <>
+                {filteredSubs.map(s => (
+                  <div key={s.id} className="p-3 bg-obsidian-light/30 border border-white/5 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-1 relative group pr-10 overflow-hidden">
+                    <span className="text-sm text-white truncate flex-1">{s.email}</span>
+                    <span className="text-xs text-text-main/50 shrink-0">{new Date(s.subscribedAt).toLocaleDateString()}</span>
+                    <button onClick={() => deleteSubscriber(s.id)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-red-500/10 text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {filteredSubs.length === 0 && <p className="text-sm text-text-main/50 text-center py-4">No subscribers found.</p>}
+              </>
             )}
           </div>
         </motion.div>
