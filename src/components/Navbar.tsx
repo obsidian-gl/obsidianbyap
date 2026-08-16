@@ -26,9 +26,6 @@ export default function Navbar() {
           <Link to="/projects" className="text-sm font-medium text-text-main hover:text-accent transition-colors">
             PROJECTS
           </Link>
-          <Link to="/qr-ferry" className="text-sm font-medium text-text-main hover:text-accent transition-colors">
-            QR-FERRY
-          </Link>
           
           <div className="h-6 w-px bg-obsidian-light/50"></div>
           

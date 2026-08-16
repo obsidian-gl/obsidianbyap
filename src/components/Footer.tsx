@@ -7,7 +7,7 @@ export default function Footer() {
           <span className="text-sm text-text-main/70 font-medium">© {new Date().getFullYear()} Obsidian. All rights reserved.</span>
         </div>
         <div className="flex items-center gap-6 text-sm text-text-main/60">
-          <a href="https://akshatpopat.veecel.app" target="_blank" rel="noreferrer" className="hover:text-accent transition-colors">CEO Portfolio</a>
+          <a href="https://akshatpopat.vercel.app" target="_blank" rel="noreferrer" className="hover:text-accent transition-colors">CEO Portfolio</a>
           <a href="https://instagram.com/theakshatpopat" target="_blank" rel="noreferrer" className="hover:text-accent transition-colors">Instagram</a>
           <a href="https://linkedin.com/in/akshatpopat" target="_blank" rel="noreferrer" className="hover:text-accent transition-colors">LinkedIn</a>
           <a href="mailto:enquiry.akshatpopat@gmail.com" className="hover:text-accent transition-colors">Contact</a>

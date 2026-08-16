@@ -51,7 +51,7 @@ export default function Home() {
           <a href="/projects" className="px-8 py-4 rounded-full bg-white text-obsidian font-semibold tracking-wide hover:bg-accent transition-colors duration-300 flex items-center gap-2">
             Explore Projects <ArrowRight className="w-5 h-5" />
           </a>
-          <a href="https://akshatpopat.veecel.app" target="_blank" rel="noreferrer" className="px-8 py-4 rounded-full glass border border-white/10 text-white font-medium hover:bg-white/5 transition-all duration-300">
+          <a href="https://akshatpopat.vercel.app" target="_blank" rel="noreferrer" className="px-8 py-4 rounded-full glass border border-white/10 text-white font-medium hover:bg-white/5 transition-all duration-300">
             Meet the CEO
           </a>
         </div>

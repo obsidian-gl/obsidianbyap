@@ -10,6 +10,8 @@ import CanvasBackground from './components/CanvasBackground';
 import Home from './pages/Home';
 import Projects from './pages/Projects';
 import QrFerry from './pages/QrFerry';
+import KyroRhythm from './pages/KyroRhythm';
+import Chatify from './pages/Chatify';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 
@@ -24,6 +26,8 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/qr-ferry" element={<QrFerry />} />
+            <Route path="/kyro-rhythm" element={<KyroRhythm />} />
+            <Route path="/chatify" element={<Chatify />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>
