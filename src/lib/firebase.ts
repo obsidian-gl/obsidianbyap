@@ -46,7 +46,17 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Sign in error:', error);
-    alert(`Sign in error: ${error.message || 'Please open the app in a new tab if popups are blocked.'}`);
+    
+    // Check if the error is related to an unauthorized domain (common in Vercel deployments)
+    if (error.code === 'auth/unauthorized-domain') {
+      alert(`Domain not authorized! Please add your Vercel domain to Firebase Console -> Authentication -> Settings -> Authorized domains.`);
+    } else if (error.code === 'auth/popup-closed-by-user') {
+      // User closed the popup, do nothing or show a mild warning
+      console.log('Sign-in cancelled by user.');
+    } else {
+      alert(`Sign in error: ${error.message || 'Please ensure your domain is authorized in Firebase and Google Cloud.'}`);
+    }
+    
     throw error;
   } finally {
     isSigningIn = false;
@@ -92,14 +102,3 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
-
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error: any) {
-    if (error.message && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
-  }
-}
-testConnection();
