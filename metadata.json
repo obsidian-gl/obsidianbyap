@@ -1,0 +1,6 @@
+{
+  "name": "Obsidian",
+  "description": "3D Premium platform for Obsidian software suite.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
