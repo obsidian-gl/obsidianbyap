@@ -23,7 +23,7 @@ export default function Admin() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin' && password === '123') {
+    if (username === 'theakshatpopat' && password === 'Aprt9311') {
       setIsAuthenticated(true);
       fetchData();
     } else {
