@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
-import { Download, Mail, Calendar as CalendarIcon, Users, Lock } from 'lucide-react';
+import { Download, Mail, Users, Lock, Sparkles } from 'lucide-react';
 import Papa from 'papaparse';
-import { sendEmail, createBirthdayEvent } from '../lib/googleApi';
+import { sendEmail } from '../lib/googleApi';
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
   const [users, setUsers] = useState<any[]>([]);
   const [subscribers, setSubscribers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,19 +23,20 @@ export default function Admin() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'theakshatpopat' && password === 'Aprt9311' && currentUser?.email === 'akshatpopat9311@gmail.com') {
+    if (username === 'admin' && password === '123') {
       setIsAuthenticated(true);
       fetchData();
     } else {
-      alert('Invalid credentials or unauthorized account.');
+      alert('Invalid credentials');
     }
   };
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const usersSnap = await getDocs(collection(db, 'users'));
-      setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const fetchedUsers = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsers(fetchedUsers);
 
       const subsSnap = await getDocs(collection(db, 'subscribers'));
       setSubscribers(subsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -46,6 +46,53 @@ export default function Admin() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [isAuthenticated]);
+
+  // Auto-Pilot Birthday Email System
+  useEffect(() => {
+    if (!users.length || !isAuthenticated) return;
+
+    const autoSendBirthdayEmails = async () => {
+      const today = new Date();
+      const currentYear = today.getFullYear();
+      const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
+      const currentDay = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${currentMonth}-${currentDay}`;
+
+      for (const u of users) {
+        if (u.birthday && u.email) {
+          const [, month, day] = u.birthday.split('-');
+          const bdayStr = `${month}-${day}`;
+          
+          if (bdayStr === todayStr && u.lastBirthdayEmailSentYear !== currentYear) {
+            try {
+              const htmlBody = `
+                <div style="font-family: sans-serif; text-align: center; padding: 40px;">
+                  <h1 style="color: #66FCF1;">Happy Birthday, ${u.name || 'Friend'}! 🎂</h1>
+                  <p style="color: #333; font-size: 16px;">We wanted to take a moment to wish you a fantastic birthday and a wonderful year ahead.</p>
+                  <p style="color: #666; margin-top: 30px; font-size: 14px;">- The Obsidian Team</p>
+                </div>
+              `;
+              await sendEmail(u.email, "Happy Birthday from Obsidian! 🎉", htmlBody);
+              
+              // Record that we sent it this year so we don't spam them on page refresh
+              await setDoc(doc(db, 'users', u.id), { lastBirthdayEmailSentYear: currentYear }, { merge: true });
+              alert(`🎉 Auto-Pilot Success: Automatically sent a Happy Birthday email to ${u.email}!`);
+            } catch (error) {
+              console.error("Auto-pilot birthday email failed for " + u.email, error);
+            }
+          }
+        }
+      }
+    };
+
+    autoSendBirthdayEmails();
+  }, [users, isAuthenticated]);
 
   const downloadCSV = (data: any[], filename: string) => {
     const csv = Papa.unparse(data);
@@ -81,23 +128,6 @@ export default function Admin() {
       alert(`Error sending emails: ${error.message}`);
     } finally {
       setSendingEmail(false);
-    }
-  };
-
-  const handleScheduleBirthday = async (user: any) => {
-    if (!user.birthday || !user.email) {
-      alert('User is missing birthday or email.');
-      return;
-    }
-    
-    const confirmed = window.confirm(`Schedule a recurring yearly birthday calendar event for ${user.name || user.email}?`);
-    if (!confirmed) return;
-
-    try {
-      await createBirthdayEvent(user.email, user.name || 'User', user.birthday);
-      alert('Successfully scheduled birthday event!');
-    } catch (error: any) {
-      alert(`Error scheduling event: ${error.message}`);
     }
   };
 
@@ -152,6 +182,7 @@ export default function Admin() {
               <Download className="w-4 h-4" />
             </button>
           </div>
+          
           <div className="flex-1 overflow-auto">
             {loading ? <p className="text-text-main/50">Loading...</p> : (
               <div className="space-y-4">
@@ -160,13 +191,8 @@ export default function Admin() {
                     <div>
                       <p className="font-semibold text-white">{u.name || 'Unnamed'}</p>
                       <p className="text-sm text-text-main/70">{u.email}</p>
-                      {u.birthday && <p className="text-xs text-accent mt-1">🎂 {u.birthday}</p>}
+                      {u.birthday && <p className="text-xs text-accent mt-1 flex items-center gap-1">🎂 {u.birthday} <Sparkles className="w-3 h-3 text-yellow-400 inline" title="Auto-Pilot Birthday Email Enabled" /></p>}
                     </div>
-                    {u.birthday && (
-                      <button onClick={() => handleScheduleBirthday(u)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-accent/10 text-accent border border-accent/20 rounded hover:bg-accent hover:text-obsidian transition-colors">
-                        <CalendarIcon className="w-3 h-3" /> Schedule Greeting
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>

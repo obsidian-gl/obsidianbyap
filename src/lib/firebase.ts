@@ -107,7 +107,7 @@ export const getAccessToken = async (): Promise<string | null> => {
   if (cachedAccessToken) return cachedAccessToken;
   
   if (auth.currentUser) {
-    const wantsReauth = window.confirm("You need to grant permission to schedule events. Sign in again to authorize Google Calendar?");
+    const wantsReauth = window.confirm("You need to grant permission to schedule events and send emails. Sign in again to authorize Google APIs?");
     if (wantsReauth) {
       const res = await googleSignIn();
       return res?.accessToken || null;
