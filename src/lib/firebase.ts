@@ -1,10 +1,21 @@
 import { initializeApp } from 'firebase/app';
+import { getAnalytics } from 'firebase/analytics';
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCXGDDy-012M3l9R8DkHQm6dtEMy9HP1oo",
+  authDomain: "obsidian-27cf6.firebaseapp.com",
+  projectId: "obsidian-27cf6",
+  storageBucket: "obsidian-27cf6.firebasestorage.app",
+  messagingSenderId: "836888630937",
+  appId: "1:836888630937:web:a929778583638b95808a08",
+  measurementId: "G-0SF04RGWF9"
+};
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId || '(default)');
+export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+export const db = getFirestore(app, 'obsidian');
 export const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
