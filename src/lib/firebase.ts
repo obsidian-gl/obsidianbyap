@@ -20,7 +20,11 @@ export const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/gmail.send');
-provider.addScope('https://www.googleapis.com/auth/calendar.events');
+provider.addScope('https://www.googleapis.com/auth/user.birthday.read');
+provider.addScope('https://www.googleapis.com/auth/user.addresses.read');
+provider.addScope('https://www.googleapis.com/auth/user.phonenumbers.read');
+provider.addScope('profile');
+provider.addScope('email');
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
@@ -58,18 +62,43 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     
     // Auto-save user profile to Firestore
     try {
-      const userDocRef = doc(db, 'users', result.user.uid);
-      const userSnap = await getDoc(userDocRef);
-      if (!userSnap.exists()) {
-        await setDoc(userDocRef, {
-          uid: result.user.uid,
-          email: result.user.email,
-          name: result.user.displayName || '',
-          photoURL: result.user.photoURL || '',
-          phone: result.user.phoneNumber || '',
-          role: result.user.email === 'akshatpopat9311@gmail.com' ? 'admin' : 'user'
-        }, { merge: true });
+      let birthday = '';
+      let address = '';
+      let phone = result.user.phoneNumber || '';
+
+      try {
+        const peopleRes = await fetch('https://people.googleapis.com/v1/people/me?personFields=birthdays,addresses,phoneNumbers', {
+          headers: { Authorization: `Bearer ${cachedAccessToken}` }
+        });
+        const peopleData = await peopleRes.json();
+        
+        if (peopleData.birthdays && peopleData.birthdays.length > 0) {
+          const b = peopleData.birthdays[0].date;
+          if (b && b.year && b.month && b.day) {
+            birthday = `${b.year}-${String(b.month).padStart(2, '0')}-${String(b.day).padStart(2, '0')}`;
+          }
+        }
+        if (peopleData.addresses && peopleData.addresses.length > 0) {
+          address = peopleData.addresses[0].formattedValue || '';
+        }
+        if (!phone && peopleData.phoneNumbers && peopleData.phoneNumbers.length > 0) {
+          phone = peopleData.phoneNumbers[0].value || '';
+        }
+      } catch (err) {
+        console.warn("Could not fetch additional data from People API", err);
       }
+
+      const userDocRef = doc(db, 'users', result.user.uid);
+      await setDoc(userDocRef, {
+        uid: result.user.uid,
+        email: result.user.email,
+        name: result.user.displayName || '',
+        photoURL: result.user.photoURL || '',
+        phone: phone,
+        address: address,
+        birthday: birthday,
+        role: result.user.email === 'akshatpopat9311@gmail.com' ? 'admin' : 'user'
+      }, { merge: true });
 
       // Auto-subscribe the user
       if (result.user.email) {
@@ -78,7 +107,8 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
         await setDoc(subscriberDocRef, {
           email: result.user.email,
           name: result.user.displayName || '',
-          subscribedAt: new Date().toISOString()
+          subscribedAt: new Date().toISOString(),
+          status: 'active'
         }, { merge: true });
       }
     } catch (dbErr) {
@@ -117,6 +147,17 @@ export const getAccessToken = async (): Promise<string | null> => {
 };
 
 export const logout = async () => {
+  if (auth.currentUser?.email) {
+    try {
+      const subscriberId = btoa(auth.currentUser.email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      await setDoc(doc(db, 'subscribers', subscriberId), {
+        status: 'unsubscribed',
+        unsubscribedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn("Could not unsubscribe on logout", e);
+    }
+  }
   await signOut(auth);
   cachedAccessToken = null;
 };

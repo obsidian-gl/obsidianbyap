@@ -17,8 +17,9 @@ export default function Home() {
       const subscriberId = btoa(email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       await setDoc(doc(db, 'subscribers', subscriberId), {
         email,
-        subscribedAt: new Date().toISOString()
-      });
+        subscribedAt: new Date().toISOString(),
+        status: 'active'
+      }, { merge: true });
       setSubscribed(true);
       setEmail('');
     } catch (err) {
