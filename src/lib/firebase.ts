@@ -18,13 +18,16 @@ export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : nul
 export const db = getFirestore(app, 'obsidian');
 export const auth = getAuth(app);
 
+// Normal provider for regular users (No scary scopes)
 const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/gmail.send');
-provider.addScope('https://www.googleapis.com/auth/user.birthday.read');
-provider.addScope('https://www.googleapis.com/auth/user.addresses.read');
-provider.addScope('https://www.googleapis.com/auth/user.phonenumbers.read');
 provider.addScope('profile');
 provider.addScope('email');
+
+// Admin provider for sending emails
+const adminProvider = new GoogleAuthProvider();
+adminProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+adminProvider.addScope('profile');
+adminProvider.addScope('email');
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
@@ -54,51 +57,27 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     
-    if (!credential?.accessToken) {
-      throw new Error('Failed to get access token from Firebase Auth');
-    }
-    
-    cachedAccessToken = credential.accessToken;
-    
     // Auto-save user profile to Firestore
     try {
-      let birthday = '';
-      let address = '';
-      let phone = result.user.phoneNumber || '';
-
-      try {
-        const peopleRes = await fetch('https://people.googleapis.com/v1/people/me?personFields=birthdays,addresses,phoneNumbers', {
-          headers: { Authorization: `Bearer ${cachedAccessToken}` }
-        });
-        const peopleData = await peopleRes.json();
-        
-        if (peopleData.birthdays && peopleData.birthdays.length > 0) {
-          const b = peopleData.birthdays[0].date;
-          if (b && b.year && b.month && b.day) {
-            birthday = `${b.year}-${String(b.month).padStart(2, '0')}-${String(b.day).padStart(2, '0')}`;
-          }
-        }
-        if (peopleData.addresses && peopleData.addresses.length > 0) {
-          address = peopleData.addresses[0].formattedValue || '';
-        }
-        if (!phone && peopleData.phoneNumbers && peopleData.phoneNumbers.length > 0) {
-          phone = peopleData.phoneNumbers[0].value || '';
-        }
-      } catch (err) {
-        console.warn("Could not fetch additional data from People API", err);
-      }
-
       const userDocRef = doc(db, 'users', result.user.uid);
-      await setDoc(userDocRef, {
+      const userSnap = await getDoc(userDocRef);
+      
+      const userData: any = {
         uid: result.user.uid,
         email: result.user.email,
         name: result.user.displayName || '',
         photoURL: result.user.photoURL || '',
-        phone: phone,
-        address: address,
-        birthday: birthday,
         role: result.user.email === 'akshatpopat9311@gmail.com' ? 'admin' : 'user'
-      }, { merge: true });
+      };
+
+      // Ensure we don't overwrite manual inputs if they already exist
+      if (!userSnap.exists()) {
+        userData.phone = '';
+        userData.address = '';
+        userData.birthday = '';
+      }
+
+      await setDoc(userDocRef, userData, { merge: true });
 
       // Auto-subscribe the user
       if (result.user.email) {
@@ -114,19 +93,32 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     } catch (dbErr) {
       console.warn("Could not save user/subscription to Firestore. Make sure Firestore rules are deployed.", dbErr);
     }
-
-    return { user: result.user, accessToken: cachedAccessToken };
+    
+    return { user: result.user, accessToken: credential?.accessToken || '' };
   } catch (error: any) {
     console.error('Sign in error:', error);
-    
     if (error.code === 'auth/unauthorized-domain') {
       alert(`Domain not authorized! Please add your Vercel domain to Firebase Console -> Authentication -> Settings -> Authorized domains.`);
-    } else if (error.code === 'auth/popup-closed-by-user') {
-      console.log('Sign-in cancelled by user.');
-    } else {
-      alert(`Sign in error: ${error.message || 'Please ensure your domain is authorized in Firebase and Google Cloud.'}`);
+    } else if (error.code !== 'auth/popup-closed-by-user') {
+      alert(`Sign in error: ${error.message}`);
     }
-    
+    throw error;
+  } finally {
+    isSigningIn = false;
+  }
+};
+
+export const adminGoogleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+  try {
+    isSigningIn = true;
+    const result = await signInWithPopup(auth, adminProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+       cachedAccessToken = credential.accessToken;
+    }
+    return { user: result.user, accessToken: cachedAccessToken || '' };
+  } catch (error) {
+    console.error("Admin sign in failed", error);
     throw error;
   } finally {
     isSigningIn = false;
@@ -136,10 +128,10 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 export const getAccessToken = async (): Promise<string | null> => {
   if (cachedAccessToken) return cachedAccessToken;
   
-  if (auth.currentUser) {
-    const wantsReauth = window.confirm("You need to grant permission to schedule events and send emails. Sign in again to authorize Google APIs?");
+  if (auth.currentUser && auth.currentUser.email === 'akshatpopat9311@gmail.com') {
+    const wantsReauth = window.confirm("Admin: You need to grant permission to send emails. Sign in again to authorize Google APIs?");
     if (wantsReauth) {
-      const res = await googleSignIn();
+      const res = await adminGoogleSignIn();
       return res?.accessToken || null;
     }
   }

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { motion } from 'motion/react';
-import { Download, Upload, Mail, Users, Lock, Sparkles, Paperclip, Link as LinkIcon, X } from 'lucide-react';
+import { Download, Upload, Mail, Users, Lock, Sparkles, Paperclip, Link as LinkIcon, X, Trash2 } from 'lucide-react';
 import Papa from 'papaparse';
 import { sendEmail } from '../lib/googleApi';
 
@@ -105,7 +105,23 @@ export default function Admin() {
   }, [users, isAuthenticated]);
 
   const downloadCSV = (data: any[], filename: string) => {
-    const csv = Papa.unparse(data);
+    // Explicitly define columns so that even if the first row lacks them, they are included
+    const columns = ["id", "email", "name", "phone", "address", "birthday", "role", "photoURL"];
+    
+    // Create a normalized array of objects containing all keys
+    const normalizedData = data.map(item => {
+      const row: any = {};
+      columns.forEach(col => {
+        row[col] = item[col] || '';
+      });
+      // also copy any extra fields
+      Object.keys(item).forEach(key => {
+        if (!columns.includes(key)) row[key] = item[key];
+      });
+      return row;
+    });
+
+    const csv = Papa.unparse(normalizedData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -211,6 +227,26 @@ export default function Admin() {
     }
   };
 
+  const deleteUser = async (userId: string) => {
+    if (!window.confirm("Are you sure you want to delete this user completely?")) return;
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (e: any) {
+      alert("Failed to delete user: " + e.message);
+    }
+  };
+
+  const deleteSubscriber = async (subId: string) => {
+    if (!window.confirm("Are you sure you want to delete this subscriber?")) return;
+    try {
+      await deleteDoc(doc(db, 'subscribers', subId));
+      setSubscribers(prev => prev.filter(s => s.id !== subId));
+    } catch (e: any) {
+      alert("Failed to delete subscriber: " + e.message);
+    }
+  };
+
   if (!currentUser || currentUser.email !== 'akshatpopat9311@gmail.com') {
     return (
       <div className="min-h-screen pt-32 flex flex-col items-center justify-center px-4 sm:px-6">
@@ -267,10 +303,13 @@ export default function Admin() {
             {loading ? <p className="text-text-main/50">Loading...</p> : (
               <div className="space-y-3 sm:space-y-4">
                 {users.map(u => (
-                  <div key={u.id} className="p-3 sm:p-4 bg-obsidian-light/50 border border-white/5 rounded-lg flex flex-col gap-2 min-w-[200px]">
+                  <div key={u.id} className="p-3 sm:p-4 bg-obsidian-light/50 border border-white/5 rounded-lg flex flex-col gap-2 min-w-[200px] relative group">
+                    <button onClick={() => deleteUser(u.id)} className="absolute top-2 right-2 p-1.5 bg-red-500/10 text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     <div className="flex items-start gap-3">
                       {u.photoURL && <img src={u.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-white/10" />}
-                      <div className="overflow-hidden">
+                      <div className="overflow-hidden pr-8">
                         <p className="font-semibold text-white text-sm sm:text-base truncate">{u.name || 'Unnamed'}</p>
                         <p className="text-xs sm:text-sm text-text-main/70 truncate">{u.email}</p>
                       </div>
@@ -338,10 +377,13 @@ export default function Admin() {
 
           <div className="flex-1 overflow-y-auto space-y-2 min-h-[150px]">
             {loading ? <p className="text-text-main/50">Loading...</p> : (
-              activeSubscribers.map(s => (
-                <div key={s.id} className="p-3 bg-obsidian-light/30 border border-white/5 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <span className="text-sm text-white truncate">{s.email}</span>
+              subscribers.map(s => (
+                <div key={s.id} className="p-3 bg-obsidian-light/30 border border-white/5 rounded flex flex-col sm:flex-row sm:items-center justify-between gap-1 relative group pr-10">
+                  <span className="text-sm text-white truncate">{s.email} {s.status === 'unsubscribed' && <span className="text-red-400 text-xs ml-2">(Unsubscribed)</span>}</span>
                   <span className="text-xs text-text-main/50">{new Date(s.subscribedAt).toLocaleDateString()}</span>
+                  <button onClick={() => deleteSubscriber(s.id)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-red-500/10 text-red-400 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
               ))
             )}

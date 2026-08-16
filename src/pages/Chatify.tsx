@@ -27,7 +27,7 @@ export default function Chatify() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 0.2 }}
-        className="w-full aspect-video max-w-5xl rounded-2xl overflow-hidden glass-panel border border-accent/20 p-2"
+        className="w-full h-[70vh] md:aspect-video md:h-auto max-w-5xl rounded-2xl overflow-hidden glass-panel border border-accent/20 p-2"
       >
         <iframe 
           src="https://chatify.ai.studio" 
