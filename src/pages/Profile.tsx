@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { motion } from 'motion/react';
 import { Save } from 'lucide-react';
 
 export default function Profile() {
-  const user = auth.currentUser;
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,7 +18,16 @@ export default function Profile() {
   });
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
+    
     const fetchProfile = async () => {
       try {
         const docRef = doc(db, 'users', user.uid);
@@ -30,7 +41,7 @@ export default function Profile() {
             birthday: data.birthday || ''
           });
         } else {
-          setFormData(prev => ({ ...prev, name: user.displayName || '' }));
+          setFormData(prev => ({ ...prev, name: user.displayName || '', phone: user.phoneNumber || '' }));
         }
       } catch (err) {
         handleFirestoreError(err, OperationType.GET, 'users');
@@ -38,6 +49,7 @@ export default function Profile() {
         setLoading(false);
       }
     };
+
     fetchProfile();
   }, [user]);
 
@@ -59,6 +71,18 @@ export default function Profile() {
       setSaving(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen pt-32 flex items-center justify-center">
+        <div className="animate-pulse flex items-center gap-2">
+           <div className="w-2 h-2 bg-accent rounded-full"></div>
+           <div className="w-2 h-2 bg-accent rounded-full delay-75"></div>
+           <div className="w-2 h-2 bg-accent rounded-full delay-150"></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from 'firebase/analytics';
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, User, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCXGDDy-012M3l9R8DkHQm6dtEMy9HP1oo",
@@ -49,20 +49,49 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     isSigningIn = true;
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
+    
     if (!credential?.accessToken) {
       throw new Error('Failed to get access token from Firebase Auth');
     }
-
+    
     cachedAccessToken = credential.accessToken;
+    
+    // Auto-save user profile to Firestore
+    try {
+      const userDocRef = doc(db, 'users', result.user.uid);
+      const userSnap = await getDoc(userDocRef);
+      if (!userSnap.exists()) {
+        await setDoc(userDocRef, {
+          uid: result.user.uid,
+          email: result.user.email,
+          name: result.user.displayName || '',
+          photoURL: result.user.photoURL || '',
+          phone: result.user.phoneNumber || '',
+          role: result.user.email === 'akshatpopat9311@gmail.com' ? 'admin' : 'user'
+        }, { merge: true });
+      }
+
+      // Auto-subscribe the user
+      if (result.user.email) {
+        const subscriberId = btoa(result.user.email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const subscriberDocRef = doc(db, 'subscribers', subscriberId);
+        await setDoc(subscriberDocRef, {
+          email: result.user.email,
+          name: result.user.displayName || '',
+          subscribedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch (dbErr) {
+      console.warn("Could not save user/subscription to Firestore. Make sure Firestore rules are deployed.", dbErr);
+    }
+
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Sign in error:', error);
     
-    // Check if the error is related to an unauthorized domain (common in Vercel deployments)
     if (error.code === 'auth/unauthorized-domain') {
       alert(`Domain not authorized! Please add your Vercel domain to Firebase Console -> Authentication -> Settings -> Authorized domains.`);
     } else if (error.code === 'auth/popup-closed-by-user') {
-      // User closed the popup, do nothing or show a mild warning
       console.log('Sign-in cancelled by user.');
     } else {
       alert(`Sign in error: ${error.message || 'Please ensure your domain is authorized in Firebase and Google Cloud.'}`);
@@ -75,7 +104,16 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  return cachedAccessToken;
+  if (cachedAccessToken) return cachedAccessToken;
+  
+  if (auth.currentUser) {
+    const wantsReauth = window.confirm("You need to grant permission to schedule events. Sign in again to authorize Google Calendar?");
+    if (wantsReauth) {
+      const res = await googleSignIn();
+      return res?.accessToken || null;
+    }
+  }
+  return null;
 };
 
 export const logout = async () => {
